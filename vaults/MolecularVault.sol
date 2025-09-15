@@ -6,6 +6,7 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "../common/TransferTokenHelper.sol";
 import "../interfaces/IVaultStrategy.sol";
 import "../interfaces/IMolecularVault.sol";
@@ -15,6 +16,7 @@ import "../interfaces/IMolecularVault.sol";
 **/
 contract MolecularVault is IMolecularVault, Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     // @dev Amount of underlying tokens provided by the user.
     struct VaultUserInfo {
@@ -40,7 +42,7 @@ contract MolecularVault is IMolecularVault, Initializable, OwnableUpgradeable, R
     mapping(address => VaultUserInfo) public userInfoMap;
 
     // User list
-    address[] public userList;
+    EnumerableSet.AddressSet private userList;
 
     /// @notice Emitted when user deposit assets
     /// @param user Address that deposited
@@ -57,9 +59,6 @@ contract MolecularVault is IMolecularVault, Initializable, OwnableUpgradeable, R
 
     /// @notice Emitted when set the mainChef
     event SetMainChef(address indexed mainChef);
-
-    /// @notice Emitted when set the Native address
-    event SetCoreAddress(address indexed _ethAddr);
 
     /// @notice Emitted when set the assets address
     event SetAssets(address indexed _assetsAddr);
@@ -107,14 +106,6 @@ contract MolecularVault is IMolecularVault, Initializable, OwnableUpgradeable, R
         emit SetMainChef(address(_mainChef));
     }
 
-    /// @notice Set Native address
-    /// @param _coreAddress Native address
-    function setCoreAddress(address _coreAddress) external onlyOwner {
-        nativeAddress = _coreAddress;
-
-        emit SetCoreAddress(_coreAddress);
-    }
-
     /// @notice Set the assets of the vault
     /// @param _assets The assets of the vault
     function setAssets(address _assets) external onlyOwner {
@@ -147,7 +138,8 @@ contract MolecularVault is IMolecularVault, Initializable, OwnableUpgradeable, R
 
     /// @notice Return users list that interact with the vault
     function getVaultUserList() public view returns (address[] memory) {
-        return userList;
+        address[] memory _userList = userList.values();
+        return _userList;
     }
 
     /// @notice Deposit assets to the vault
@@ -164,7 +156,7 @@ contract MolecularVault is IMolecularVault, Initializable, OwnableUpgradeable, R
             _depositAmount = _deposit(_userAddr, mainChef, _amount);
         }
 
-        userList.push(_userAddr);
+        userList.add(_userAddr);
         emit DepositAssetsToVault(_userAddr, _depositAmount);
 
         return _depositAmount;
@@ -199,7 +191,7 @@ contract MolecularVault is IMolecularVault, Initializable, OwnableUpgradeable, R
 
         // deposit to strategy if has
         if (address(strategy) != address(0)) {
-            IVaultStrategy(strategy).deposit(address(this), _amount);
+            IVaultStrategy(strategy).deposit(address(this), _depositAmount);
         }
 
         return _depositAmount;
